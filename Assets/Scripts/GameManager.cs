@@ -11,7 +11,7 @@ public class GameManager : MonoBehaviour
     public TextMeshProUGUI text;
     public int level;
     public bool done;
-    private float snapThreshold = 5f; // Define a threshold for snapping
+    private float snapThreshold = 50f; // Define a threshold for snapping
     private float cubeHeight = 40f;
 
     public float cameraMoveSpeed = 1f; // Speed at which the camera moves
@@ -21,14 +21,15 @@ public class GameManager : MonoBehaviour
 
     public Material backgroundMaterial;
 
-    // Start is called before the first frame update
+    private int perfectPiecesCount = 0; // Track how many pieces were missed
+    private const int MaxPerfectPieces = 8; // When this count is reached, grow the next perfect cube
     void Start()
     {
+        Physics.gravity = new Vector3(0, -20f, 0);
         // Set initial position and angle for the camera to align properly with the tower
         Camera.main.transform.position = currentCube.transform.position + initialCameraPositionOffset;
-        //initialCameraRotation = Quaternion.LookRotation(-initialCameraPositionOffset.normalized); // Set the camera to look directly at the tower's base
-        //Camera.main.transform.rotation = initialCameraRotation;
         Camera.main.transform.rotation = initialCameraRotation;
+
         // Initialize the first block
         newBlock();
     }
@@ -70,29 +71,24 @@ public class GameManager : MonoBehaviour
             float newScaleX = lastCube.transform.localScale.x - MathF.Abs(currentCube.transform.position.x - lastCube.transform.position.x);
             float newScaleZ = lastCube.transform.localScale.z - MathF.Abs(currentCube.transform.position.z - lastCube.transform.position.z);
 
-            // Maintain the same height for the block
-            currentCube.transform.localScale = new Vector3(
-                Mathf.Max(0, newScaleX), // Prevent negative scale
-                lastCube.transform.localScale.y, // Keep the same height
-                Mathf.Max(0, newScaleZ)  // Prevent negative scale
-            );
-
-            // Center the block between lastCube and currentCube positions and move it up by 5 units
-            currentCube.transform.position = Vector3.Lerp(
-                currentCube.transform.position,
-                lastCube.transform.position,
-                0.5f
-            ) + Vector3.up * cubeHeight/2;
-
             // Check if the block is too small
-            if (currentCube.transform.localScale.x <= 0f || currentCube.transform.localScale.z <= 0f)
+            if (newScaleX <= 0f || newScaleZ <= 0f)
             {
+                CreateFallingPiece(currentCube.transform.position, currentCube.transform.localScale, currentCube.GetComponent<MeshRenderer>().material);
                 done = true;
                 text.gameObject.SetActive(true);
                 text.text = "Your Score " + level;
                 StartCoroutine(x());
                 return;
             }
+
+            // Adjust the current cube size and position
+            Vector3 currentPos = currentCube.transform.position;
+            currentCube.transform.localScale = new Vector3(newScaleX, lastCube.transform.localScale.y, newScaleZ);
+            currentCube.transform.position = Vector3.Lerp(currentCube.transform.position, lastCube.transform.position, 0.5f) + Vector3.up * cubeHeight / 2;
+
+            // Create the falling piece based on the excess
+            CreateFallingPiece(currentPos, diffX, diffZ, newScaleX, newScaleZ, currentCube.GetComponent<MeshRenderer>().material);
         }
 
         // Set the lastCube as the current one and instantiate a new currentCube
@@ -107,12 +103,126 @@ public class GameManager : MonoBehaviour
         level++;
 
         // Update the camera's target position to gradually increase in the Y direction
-        targetCameraPosition = new Vector3(Camera.main.transform.position.x, initialCameraPositionOffset.y + (level * cubeHeight), Camera.main.transform.position.z); // Increment Y by 10 units per level
+        targetCameraPosition = new Vector3(Camera.main.transform.position.x, initialCameraPositionOffset.y + (level * cubeHeight), Camera.main.transform.position.z);
+    }
+
+    // Method to create the falling piece based on the difference in position and scale
+    private void CreateFallingPiece(Vector3 currentPos, float diffX, float diffZ, float newScaleX, float newScaleZ, Material cubeMaterial)
+    {
+        Vector3 fallingPieceScale = Vector3.zero;
+        Vector3 fallingPiecePosition = Vector3.zero;
+
+        // Minimum scale threshold to avoid creating 2D or zero-sized pieces
+        const float minScaleThreshold = 0.1f;
+
+        // Calculate the actual excess based on current and last cube positions
+        float excessX = currentPos.x - lastCube.transform.position.x;
+        float excessZ = currentPos.z - lastCube.transform.position.z;
+
+        if (MathF.Abs(excessX) > snapThreshold) // Excess on the X axis
+        {
+            float fallingPieceWidth = MathF.Abs(excessX);
+
+            // Only create falling piece if there's significant excess
+            if (fallingPieceWidth > minScaleThreshold)
+            {
+                fallingPieceScale = new Vector3(fallingPieceWidth, currentCube.transform.localScale.y, currentCube.transform.localScale.z);
+                fallingPiecePosition = currentPos + new Vector3((fallingPieceWidth / 2) * MathF.Sign(excessX), 0, 0);
+                fallingPiecePosition.x = lastCube.transform.position.x + MathF.Sign(excessX) * (lastCube.transform.localScale.x / 2 + fallingPieceScale.x / 2);
+            }
+        }
+        else if (MathF.Abs(excessZ) > snapThreshold) // Excess on the Z axis
+        {
+            float fallingPieceDepth = MathF.Abs(excessZ);
+
+            // Only create falling piece if there's significant excess
+            if (fallingPieceDepth > minScaleThreshold)
+            {
+                fallingPieceScale = new Vector3(currentCube.transform.localScale.x, currentCube.transform.localScale.y, fallingPieceDepth);
+                fallingPiecePosition = currentPos + new Vector3(0, 0, (fallingPieceDepth / 2) * MathF.Sign(excessZ));
+                fallingPiecePosition.z = lastCube.transform.position.z + MathF.Sign(excessZ) * (lastCube.transform.localScale.z / 2 + fallingPieceScale.z / 2);
+            }
+        }
+
+        // Create the falling piece only if the scale is above the threshold
+        if (fallingPieceScale.x > minScaleThreshold && fallingPieceScale.z > minScaleThreshold)
+        {
+            GameObject fallingPiece = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            fallingPiece.transform.localScale = fallingPieceScale;
+            fallingPiece.transform.position = fallingPiecePosition;
+
+            // Apply the material correctly
+            MeshRenderer renderer = fallingPiece.GetComponent<MeshRenderer>();
+            if (renderer != null)
+            {
+                renderer.material = new Material(cubeMaterial); // Clone the material
+            }
+            else
+            {
+                Debug.LogError("Falling piece MeshRenderer not found.");
+            }
+
+            // Add Rigidbody for physics-based falling
+            Rigidbody rb = fallingPiece.AddComponent<Rigidbody>();
+            rb.mass = 5f; // Increased mass for faster falling
+            rb.useGravity = true;
+            rb.drag = 0.1f; // Decreased drag for faster falling
+            fallingPiece.AddComponent<DestroyWhenOutOfView>();
+            Debug.Log("Created falling piece at " + fallingPiece.transform.position + " with scale " + fallingPiece.transform.localScale);
+        }
+        else
+        {
+            //Debug.LogWarning("Falling piece not created due to insufficient scale. Current scale: " + fallingPieceScale);
+            perfectPiecesCount++;
+            if (perfectPiecesCount>=MaxPerfectPieces)
+            {
+                GrowPerfectCube();
+            }
+        }
+    }
+    private void GrowPerfectCube()
+    {
+        // Enlarge the current cube on the axis it's placed on (after it has been placed perfectly)
+        if (level % 2 == 0 && currentCube.transform.localScale.x<=120) // On X-axis
+        {
+            currentCube.transform.localScale += new Vector3(10f, 0f, 0f); // Increase scale in X
+        }
+        else if (level % 2 != 0 && currentCube.transform.localScale.z <= 120) // On Z-axis
+        {
+            currentCube.transform.localScale += new Vector3(0f, 0f, 10f); // Increase scale in Z
+        }
+    }
+
+    // Overloaded method to create the falling piece when the game ends
+    private void CreateFallingPiece(Vector3 position, Vector3 scale, Material cubeMaterial)
+    {
+        GameObject fallingPiece = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        fallingPiece.transform.localScale = scale;
+        fallingPiece.transform.position = position;
+
+        // Apply the correct material to the falling piece
+        MeshRenderer renderer = fallingPiece.GetComponent<MeshRenderer>();
+        if (renderer != null)
+        {
+            // Clone the material to ensure it's applied correctly
+            renderer.material = new Material(cubeMaterial);
+        }
+        else
+        {
+            Debug.LogError("Falling piece MeshRenderer not found.");
+        }
+
+        // Add Rigidbody to make the piece fall
+        Rigidbody rb = fallingPiece.AddComponent<Rigidbody>();
+        rb.mass = 5f;
+        rb.useGravity = true;
+        // Add the script to destroy the object when it leaves the view
+        fallingPiece.AddComponent<DestroyWhenOutOfView>();
+        Debug.Log("Created final falling piece at " + fallingPiece.transform.position + " with scale " + fallingPiece.transform.localScale);
     }
 
     private float moveTimer = 0f; // This will control the lerp timing
 
-    // Update is called once per frame
     void Update()
     {
         if (done)
@@ -123,8 +233,8 @@ public class GameManager : MonoBehaviour
         // Increment the custom timer
         moveTimer += Time.deltaTime;
 
-        // Ensure the moveTimer resets properly and use it for movement
-        var time = Mathf.PingPong(moveTimer, 4f) / 4f; // Time value between 0 and 1 over 4 seconds
+        // Define the ping-pong time value for smoother continuous movement
+        var time = Mathf.PingPong(moveTimer * 0.5f, 1f); // Time value between 0 and 1
 
         // Define positions to move between
         var pos1 = lastCube.transform.position + Vector3.up * cubeHeight; // Centered above the tower
@@ -133,25 +243,20 @@ public class GameManager : MonoBehaviour
         // Correct the positions for the starting point
         if (level % 2 == 0)
         {
-            // Horizontal movement: left to right
             pos2 = pos1 + Vector3.left * 130; // End at the left edge
             pos1 = pos1 + Vector3.right * 130; // Start at the right edge
         }
         else
         {
-            // Vertical movement: forward to back
             pos2 = pos1 + Vector3.forward * 130; // End at the front edge
             pos1 = pos1 + Vector3.back * 130; // Start at the back edge
         }
 
-        // Use Lerp to move between the two points based on the custom timer
+        // Use Lerp to move between the two points based on the continuous timer value
         currentCube.transform.position = Vector3.Lerp(pos1, pos2, time);
 
         // Camera movement: smoothly rise the camera upwards in Y direction
         Camera.main.transform.position = Vector3.Lerp(Camera.main.transform.position, targetCameraPosition, cameraMoveSpeed * Time.deltaTime);
-
-        // Maintain the initial camera rotation
-        //Camera.main.transform.rotation = initialCameraRotation;
 
         // Check for block placement
         if (Input.GetKeyDown(KeyCode.Space))
@@ -160,6 +265,7 @@ public class GameManager : MonoBehaviour
             moveTimer = 0f; // Reset the timer when a new block is placed
         }
     }
+
 
     IEnumerator x()
     {

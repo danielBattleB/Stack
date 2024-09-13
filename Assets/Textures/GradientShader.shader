@@ -4,6 +4,7 @@ Shader "Unlit/GradientShader"
     {
         _TopColor("Top Color", Color) = (1, 1, 1, 1) // White
         _BottomColor("Bottom Color", Color) = (0, 0, 0, 1) // Black
+        _BrightnessFactor("Brightness Factor", Float) = 2 // Factor to increase brightness
     }
         SubShader
     {
@@ -29,6 +30,7 @@ Shader "Unlit/GradientShader"
 
             fixed4 _TopColor;
             fixed4 _BottomColor;
+            float _BrightnessFactor;
 
             v2f vert(appdata v)
             {
@@ -40,9 +42,18 @@ Shader "Unlit/GradientShader"
 
             fixed4 frag(v2f i) : SV_Target
             {
-                // Linear interpolation between top and bottom color based on the y position
-                float gradient = i.uv.y * 0.5 + 0.5; // Adjust range from 0 to 1
-                return lerp(_BottomColor, _TopColor, gradient);
+                // Calculate the gradient factor based on the Y position, scaled from 0 to 1
+                float gradient = saturate(i.uv.y * 0.5 + 0.5); // Ensuring the gradient is between 0 and 1
+
+                // Brighter colors near the top and bottom
+                float brightGradient = pow(gradient, 0.7); // Adjust the power value to control brightness near top
+                float darkGradient = pow(1.0 - gradient, 0.7); // Adjust the power value to control brightness near bottom
+
+                // Interpolating and adjusting brightness at both top and bottom
+                fixed4 color = lerp(_BottomColor * _BrightnessFactor * darkGradient, _TopColor * _BrightnessFactor * brightGradient, gradient);
+
+                // Clamp the final color to not exceed the maximum color range
+                return saturate(color);
             }
             ENDCG
         }
