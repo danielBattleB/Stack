@@ -3,6 +3,7 @@ using UnityEngine;
 using TMPro;
 using System;
 using UnityEngine.SceneManagement;
+using System.Collections.Generic;
 
 public class GameManager : MonoBehaviour
 {
@@ -11,21 +12,40 @@ public class GameManager : MonoBehaviour
     public TextMeshProUGUI text;
     public int level;
     public bool done;
-    private float snapThreshold = 50f; // Define a threshold for snapping
+    private float snapThreshold = 5f; // Define a threshold for snapping
     private float cubeHeight = 40f;
 
     public float cameraMoveSpeed = 1f; // Speed at which the camera moves
-    [SerializeField] private Vector3 initialCameraPositionOffset = new Vector3(-210, 275, 210); // Initial camera offset
+    private float baseCameraMoveSpeed = 1f; // Store the base camera move speed for reference
+    private float baseCubeMoveSpeed = 0.5f; // Base cube speed
+    private float cubeMoveSpeed; // Current speed at which the cubes move
+
+    [SerializeField] private Vector3 initialCameraPositionOffset = new Vector3(-345, 600, 345); // Initial camera offset
     private Vector3 targetCameraPosition; // Target position for the camera
-    private Quaternion initialCameraRotation = Quaternion.Euler(155, 315, 180); // To store the initial camera rotation
+    private Quaternion initialCameraRotation = Quaternion.Euler(135, 315, 180); // To store the initial camera rotation
 
     public Material backgroundMaterial;
 
     private int perfectPiecesCount = 0; // Track how many pieces were missed
     private const int MaxPerfectPieces = 8; // When this count is reached, grow the next perfect cube
+
+    // Data structure for game speed milestones
+    private Dictionary<int, float> speedMilestones = new Dictionary<int, float>()
+    {
+        { 15, 1.5f }, // 5% increase at level 80
+        { 200, 2f } // 10% increase at level 200
+    };
+    private float speedModifier = 1f; // Tracks the current speed multiplier
+
+
     void Start()
     {
         Physics.gravity = new Vector3(0, -20f, 0);
+
+        // Set initial cube and camera speeds
+        cubeMoveSpeed = baseCubeMoveSpeed;
+
+        Camera.main.orthographic = true;  // Set camera to orthographic mode
         // Set initial position and angle for the camera to align properly with the tower
         Camera.main.transform.position = currentCube.transform.position + initialCameraPositionOffset;
         Camera.main.transform.rotation = initialCameraRotation;
@@ -76,7 +96,7 @@ public class GameManager : MonoBehaviour
             {
                 CreateFallingPiece(currentCube.transform.position, currentCube.transform.localScale, currentCube.GetComponent<MeshRenderer>().material);
                 done = true;
-                text.gameObject.SetActive(true);
+                //text.gameObject.SetActive(true);
                 text.text = "Your Score " + level;
                 StartCoroutine(x());
                 return;
@@ -101,9 +121,29 @@ public class GameManager : MonoBehaviour
         currentCube.GetComponent<MeshRenderer>().material.SetColor("_Color", newColor);
         backgroundMaterial.color = newColor;
         level++;
-
+        text.text = ""+(level-1);
         // Update the camera's target position to gradually increase in the Y direction
         targetCameraPosition = new Vector3(Camera.main.transform.position.x, initialCameraPositionOffset.y + (level * cubeHeight), Camera.main.transform.position.z);
+
+        // Check if we need to update speed
+        UpdateSpeedModifier();
+    }
+
+    private void UpdateSpeedModifier()
+    {
+        foreach (var milestone in speedMilestones)
+        {
+            if (level >= milestone.Key)
+            {
+                speedModifier = milestone.Value; // Apply the speed multiplier for this milestone
+            }
+        }
+
+        // Apply the speed modifier to both cube movement and camera movement
+        cameraMoveSpeed = baseCameraMoveSpeed * speedModifier;
+        cubeMoveSpeed = baseCubeMoveSpeed * speedModifier;
+
+        Debug.Log($"Speed updated! Modifier: {speedModifier}, Camera Speed: {cameraMoveSpeed}, Cube Move Speed: {cubeMoveSpeed}" + level);
     }
 
     // Method to create the falling piece based on the difference in position and scale
@@ -147,6 +187,9 @@ public class GameManager : MonoBehaviour
         // Create the falling piece only if the scale is above the threshold
         if (fallingPieceScale.x > minScaleThreshold && fallingPieceScale.z > minScaleThreshold)
         {
+            // Reset the perfect streak count because the cube wasn't placed perfectly
+            perfectPiecesCount = 0;
+
             GameObject fallingPiece = GameObject.CreatePrimitive(PrimitiveType.Cube);
             fallingPiece.transform.localScale = fallingPieceScale;
             fallingPiece.transform.position = fallingPiecePosition;
@@ -182,16 +225,20 @@ public class GameManager : MonoBehaviour
     }
     private void GrowPerfectCube()
     {
-        // Enlarge the current cube on the axis it's placed on (after it has been placed perfectly)
-        if (level % 2 == 0 && currentCube.transform.localScale.x<=120) // On X-axis
+        // Enlarge the current cube only if perfect streak is maintained
+        if (perfectPiecesCount >= MaxPerfectPieces)
         {
-            currentCube.transform.localScale += new Vector3(10f, 0f, 0f); // Increase scale in X
-        }
-        else if (level % 2 != 0 && currentCube.transform.localScale.z <= 120) // On Z-axis
-        {
-            currentCube.transform.localScale += new Vector3(0f, 0f, 10f); // Increase scale in Z
+            if (level % 2 == 0 && currentCube.transform.localScale.x <= 120) // On X-axis
+            {
+                currentCube.transform.localScale += new Vector3(10f, 0f, 0f); // Increase scale in X
+            }
+            else if (level % 2 != 0 && currentCube.transform.localScale.z <= 120) // On Z-axis
+            {
+                currentCube.transform.localScale += new Vector3(0f, 0f, 10f); // Increase scale in Z
+            }
         }
     }
+
 
     // Overloaded method to create the falling piece when the game ends
     private void CreateFallingPiece(Vector3 position, Vector3 scale, Material cubeMaterial)
@@ -234,7 +281,7 @@ public class GameManager : MonoBehaviour
         moveTimer += Time.deltaTime;
 
         // Define the ping-pong time value for smoother continuous movement
-        var time = Mathf.PingPong(moveTimer * 0.5f, 1f); // Time value between 0 and 1
+        var time = Mathf.PingPong(moveTimer * cubeMoveSpeed, 1f); // Time value between 0 and 1
 
         // Define positions to move between
         var pos1 = lastCube.transform.position + Vector3.up * cubeHeight; // Centered above the tower
