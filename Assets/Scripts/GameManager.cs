@@ -117,7 +117,8 @@ public class GameManager : MonoBehaviour
         currentCube.name = level.ToString();
 
         // Change the color of the current cube
-        Color newColor = Color.HSVToRGB((level / 100f) % 1f, 1f, 1f);
+        float hue = (level / 200f) % 1f; // Use a larger number to make the hue change more gradual
+        Color newColor = Color.HSVToRGB(hue, 1f, 1f);
         currentCube.GetComponent<MeshRenderer>().material.SetColor("_Color", newColor);
         backgroundMaterial.color = newColor;
         level++;
@@ -143,7 +144,7 @@ public class GameManager : MonoBehaviour
         cameraMoveSpeed = baseCameraMoveSpeed * speedModifier;
         cubeMoveSpeed = baseCubeMoveSpeed * speedModifier;
 
-        Debug.Log($"Speed updated! Modifier: {speedModifier}, Camera Speed: {cameraMoveSpeed}, Cube Move Speed: {cubeMoveSpeed}" + level);
+        //Debug.Log($"Speed updated! Modifier: {speedModifier}, Camera Speed: {cameraMoveSpeed}, Cube Move Speed: {cubeMoveSpeed}");
     }
 
     // Method to create the falling piece based on the difference in position and scale
@@ -225,17 +226,13 @@ public class GameManager : MonoBehaviour
     }
     private void GrowPerfectCube()
     {
-        // Enlarge the current cube only if perfect streak is maintained
-        if (perfectPiecesCount >= MaxPerfectPieces)
+        if (level % 2 == 0 && currentCube.transform.localScale.x < 120) // On X-axis
         {
-            if (level % 2 == 0 && currentCube.transform.localScale.x <= 120) // On X-axis
-            {
-                currentCube.transform.localScale += new Vector3(10f, 0f, 0f); // Increase scale in X
-            }
-            else if (level % 2 != 0 && currentCube.transform.localScale.z <= 120) // On Z-axis
-            {
-                currentCube.transform.localScale += new Vector3(0f, 0f, 10f); // Increase scale in Z
-            }
+            currentCube.transform.localScale += new Vector3(10f, 0f, 0f); // Increase scale in X
+        }
+        else if (level % 2 != 0 && currentCube.transform.localScale.z < 120) // On Z-axis
+        {
+            currentCube.transform.localScale += new Vector3(0f, 0f, 10f); // Increase scale in Z
         }
     }
 
