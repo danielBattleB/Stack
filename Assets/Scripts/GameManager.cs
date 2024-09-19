@@ -7,6 +7,8 @@ using System.Collections.Generic;
 
 public class GameManager : MonoBehaviour
 {
+    public GameObject gameOverScreen; // Reference to the game over UI panel
+
     public GameObject currentCube;
     public GameObject lastCube;
     public TextMeshProUGUI text;
