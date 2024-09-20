@@ -4,16 +4,19 @@ using TMPro;
 using System;
 using UnityEngine.SceneManagement;
 using System.Collections.Generic;
+using UnityEngine.UI;
 
 public class GameManager : MonoBehaviour
 {
-    public GameObject gameOverScreen; // Reference to the game over UI panel
+    public GameObject gameOverUI; // Reference to the game over UI panel
+    public TextMeshProUGUI finalScoreText; // Reference to the final score text on the Game Over screen
+    public Button playAgainButton;
 
     public GameObject currentCube;
     public GameObject lastCube;
     public TextMeshProUGUI text;
     public int level;
-    public bool done;
+    public bool gameOver;
     private float snapThreshold = 5f; // Define a threshold for snapping
     private float cubeHeight = 40f;
 
@@ -97,10 +100,15 @@ public class GameManager : MonoBehaviour
             if (newScaleX <= 0f || newScaleZ <= 0f)
             {
                 CreateFallingPiece(currentCube.transform.position, currentCube.transform.localScale, currentCube.GetComponent<MeshRenderer>().material);
-                done = true;
-                //text.gameObject.SetActive(true);
-                text.text = "Your Score " + level;
-                StartCoroutine(x());
+                gameOver = true;
+                text.gameObject.SetActive(false); // Hide the in-game score text
+
+                // Show the Game Over screen
+                gameOverUI.SetActive(true);
+
+                // Set the final score text on the Game Over screen
+                finalScoreText.text = "Your Score: " + (level - 1).ToString();
+
                 return;
             }
 
@@ -271,11 +279,16 @@ public class GameManager : MonoBehaviour
 
     void Update()
     {
-        if (done)
+        if (gameOver)
         {
             return;
         }
 
+        // Check if game is over and listen for spacebar to restart
+        if (gameOver && Input.GetKeyDown(KeyCode.Space))
+        {
+            OnPlayAgain(); // Call the Play Again method when space is pressed
+        }
         // Increment the custom timer
         moveTimer += Time.deltaTime;
 
@@ -313,9 +326,9 @@ public class GameManager : MonoBehaviour
     }
 
 
-    IEnumerator x()
+    // Function to restart the game when the Play Again button is clicked
+    public void OnPlayAgain()
     {
-        yield return new WaitForSeconds(3f);
-        SceneManager.LoadScene("Game");
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name); // Reload the current scene
     }
 }
