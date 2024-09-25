@@ -14,7 +14,7 @@ public class GameManager : MonoBehaviour
 
     public GameObject currentCube;
     public GameObject lastCube;
-    public TextMeshProUGUI text;
+    public TextMeshProUGUI scoreText;
     public int level;
     public bool gameOver;
     private float snapThreshold = 5f; // Define a threshold for snapping
@@ -42,22 +42,40 @@ public class GameManager : MonoBehaviour
     };
     private float speedModifier = 1f; // Tracks the current speed multiplier
 
+    public GameObject MainMenuCanvas; // Reference to the Main Menu Canvas
+
+    bool gameStarted = false;
 
     void Start()
     {
+        // Show the Main Menu Canvas at the start
+        MainMenuCanvas.SetActive(true);
+        gameOverUI.SetActive(false); // Ensure the game over UI is hidden at the start
+        scoreText.enabled = false;
         Physics.gravity = new Vector3(0, -20f, 0);
 
         // Set initial cube and camera speeds
         cubeMoveSpeed = baseCubeMoveSpeed;
 
         Camera.main.orthographic = true;  // Set camera to orthographic mode
-        // Set initial position and angle for the camera to align properly with the tower
         Camera.main.transform.position = currentCube.transform.position + initialCameraPositionOffset;
         Camera.main.transform.rotation = initialCameraRotation;
-
-        // Initialize the first block
-        newBlock();
     }
+    //void Start()
+    //{
+    //    Physics.gravity = new Vector3(0, -20f, 0);
+
+    //    // Set initial cube and camera speeds
+    //    cubeMoveSpeed = baseCubeMoveSpeed;
+
+    //    Camera.main.orthographic = true;  // Set camera to orthographic mode
+    //    // Set initial position and angle for the camera to align properly with the tower
+    //    Camera.main.transform.position = currentCube.transform.position + initialCameraPositionOffset;
+    //    Camera.main.transform.rotation = initialCameraRotation;
+
+    //    // Initialize the first block
+    //    newBlock();
+    //}
 
     private void newBlock()
     {
@@ -101,7 +119,7 @@ public class GameManager : MonoBehaviour
             {
                 CreateFallingPiece(currentCube.transform.position, currentCube.transform.localScale, currentCube.GetComponent<MeshRenderer>().material);
                 gameOver = true;
-                text.gameObject.SetActive(false); // Hide the in-game score text
+                scoreText.gameObject.SetActive(false); // Hide the in-game score text
 
                 // Show the Game Over screen
                 gameOverUI.SetActive(true);
@@ -132,7 +150,7 @@ public class GameManager : MonoBehaviour
         currentCube.GetComponent<MeshRenderer>().material.SetColor("_Color", newColor);
         backgroundMaterial.color = newColor;
         level++;
-        text.text = ""+(level-1);
+        scoreText.text = ""+(level-1);
         // Update the camera's target position to gradually increase in the Y direction
         targetCameraPosition = new Vector3(Camera.main.transform.position.x, initialCameraPositionOffset.y + (level * cubeHeight), Camera.main.transform.position.z);
 
@@ -279,6 +297,16 @@ public class GameManager : MonoBehaviour
 
     void Update()
     {
+        if (MainMenuCanvas.activeSelf && Input.GetMouseButtonDown(0)) // Check for screen click to start the game
+        {
+            MainMenuCanvas.SetActive(false); // Hide the Main Menu Canvas
+            gameStarted = true;
+            newBlock(); // Start the game by generating the first block
+            scoreText.enabled = true;
+        }
+
+        if (!gameStarted) return;
+
         if (gameOver)
         {
             return;
